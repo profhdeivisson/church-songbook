@@ -1,11 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { Container, Snackbar, Alert, CircularProgress, Box } from '@mui/material';
 import { SongForm } from '@/components/songs/SongForm';
 import { createClient } from '@/lib/supabase/client';
 import type { Song } from '@/types/song';
+import {
+  Alert,
+  Box,
+  CircularProgress,
+  Container,
+  Snackbar,
+} from '@mui/material';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+function nullToUndefined<T>(value: T | null): T | undefined {
+  return value === null ? undefined : value;
+}
+
+function toErrorMessage(err: unknown) {
+  if (err instanceof Error) return err.message;
+  return 'Erro ao processar requisição';
+}
 
 export default function EditSongPage() {
   const router = useRouter();
@@ -26,7 +41,9 @@ export default function EditSongPage() {
         setLoading(true);
 
         // Verificar usuário
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
           setError('Você precisa estar logado');
           router.push('/login');
@@ -41,6 +58,7 @@ export default function EditSongPage() {
           .single();
 
         if (fetchError) throw fetchError;
+        if (!data) throw new Error('Música não encontrada');
 
         // Verificar se é o dono
         if (data.created_by !== user.id) {
@@ -49,8 +67,30 @@ export default function EditSongPage() {
           return;
         }
 
-        setSong(data);
-      } catch (err: any) {
+        // Supabase pode retornar fields como null, enquanto nosso tipo Song usa undefined.
+        // Também existem campos com formato diferente (ex: other_links), então normalizamos para o shape esperado.
+        setSong({
+          ...data,
+          // URLs
+          youtube_url: nullToUndefined(data.youtube_url),
+          spotify_url: nullToUndefined(data.spotify_url),
+          cifra_url: nullToUndefined(data.cifra_url),
+          cifraclub_url: nullToUndefined(data.cifraclub_url),
+          lyrics_url: nullToUndefined(data.lyrics_url),
+
+          // Metadados (nullable no Supabase)
+          target: nullToUndefined(data.target),
+          theme: nullToUndefined(data.theme),
+          genre: nullToUndefined(data.genre),
+          observations: nullToUndefined(data.observations),
+
+          // Campos que podem vir como null e/ou formatos diferentes:
+          // Mantemos como undefined para evitar incompatibilidade de tipos.
+          other_links: undefined,
+          tone: nullToUndefined(data.tone),
+          bpm: nullToUndefined(data.bpm),
+        } as unknown as Song);
+      } catch (err) {
         console.error('Error loading song:', err);
         setError('Erro ao carregar música');
       } finally {
@@ -90,9 +130,9 @@ export default function EditSongPage() {
       setTimeout(() => {
         router.push('/');
       }, 1500);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating song:', err);
-      setError(err.message || 'Erro ao atualizar música');
+      setError(toErrorMessage(err) || 'Erro ao atualizar música');
     } finally {
       setSaving(false);
     }
@@ -105,7 +145,14 @@ export default function EditSongPage() {
   if (loading) {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '400px',
+          }}
+        >
           <CircularProgress />
         </Box>
       </Container>

@@ -1,9 +1,69 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import type { Song, SongFilters } from '@/types/song';
 import type { TablesInsert, TablesUpdate } from '@/types/database';
+import type { Song, SongFilters } from '@/types/song';
+import { revalidatePath } from 'next/cache';
+
+function nullToUndefined<T>(value: T | null): T | undefined {
+  return value === null ? undefined : value;
+}
+
+function normalizeOtherLinks(
+  value: unknown
+): import('@/types/song').OtherLink[] | undefined {
+  // Supabase may return other_links as Json (objects) instead of OtherLink[]
+  // We accept arrays of {name,url} (best-effort).
+  if (value === null || value === undefined) return undefined;
+
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized: import('@/types/song').OtherLink[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as Record<string, unknown>;
+
+    const name = typeof obj.name === 'string' ? obj.name : undefined;
+    const url = typeof obj.url === 'string' ? obj.url : undefined;
+    const icon = typeof obj.icon === 'string' ? obj.icon : undefined;
+
+    if (!name || !url) continue;
+
+    normalized.push(icon ? { name, url, icon } : { name, url });
+  }
+
+  return normalized.length ? normalized : undefined;
+}
+
+function normalizeSong(raw: unknown): Song {
+  const data = raw as Record<string, unknown>;
+
+  return {
+    id: data.id as string,
+    title: data.title as string,
+    artist: data.artist as string,
+
+    youtube_url: nullToUndefined<string>(data.youtube_url as string | null),
+    spotify_url: nullToUndefined<string>(data.spotify_url as string | null),
+    cifra_url: nullToUndefined<string>(data.cifra_url as string | null),
+    cifraclub_url: nullToUndefined<string>(data.cifraclub_url as string | null),
+    lyrics_url: nullToUndefined<string>(data.lyrics_url as string | null),
+
+    target: data.target ? (data.target as Song['target']) : undefined,
+    theme: data.theme ? (data.theme as Song['theme']) : undefined,
+    genre: data.genre ? (data.genre as Song['genre']) : undefined,
+
+    tone: nullToUndefined<string>(data.tone as string | null),
+    bpm: data.bpm === null ? undefined : (data.bpm as number),
+    observations: nullToUndefined<string>(data.observations as string | null),
+
+    other_links: normalizeOtherLinks(data.other_links),
+
+    created_by: data.created_by as string,
+    created_at: data.created_at as string,
+    updated_at: data.updated_at as string,
+  };
+}
 
 export async function getSongs(filters?: SongFilters) {
   const supabase = await createClient();
@@ -38,7 +98,7 @@ export async function getSongs(filters?: SongFilters) {
     throw new Error('Erro ao buscar músicas');
   }
 
-  return data as Song[];
+  return (data ?? []).map(s => normalizeSong(s));
 }
 
 export async function getSongById(id: string) {
@@ -55,7 +115,7 @@ export async function getSongById(id: string) {
     throw new Error('Erro ao buscar música');
   }
 
-  return data as Song;
+  return normalizeSong(data);
 }
 
 export async function createSong(songData: Partial<Song>) {
@@ -77,7 +137,8 @@ export async function createSong(songData: Partial<Song>) {
     cifra_url: songData.cifra_url || null,
     cifraclub_url: songData.cifraclub_url || null,
     lyrics_url: songData.lyrics_url || null,
-    other_links: songData.other_links || null,
+    other_links: (songData.other_links ??
+      null) as TablesInsert<'songs'>['other_links'],
     target: songData.target || null,
     theme: songData.theme || null,
     genre: songData.genre || null,
@@ -99,7 +160,7 @@ export async function createSong(songData: Partial<Song>) {
   }
 
   revalidatePath('/');
-  return data as Song;
+  return normalizeSong(data);
 }
 
 export async function updateSong(id: string, songData: Partial<Song>) {
@@ -121,7 +182,8 @@ export async function updateSong(id: string, songData: Partial<Song>) {
     cifra_url: songData.cifra_url || null,
     cifraclub_url: songData.cifraclub_url || null,
     lyrics_url: songData.lyrics_url || null,
-    other_links: songData.other_links || null,
+    other_links: (songData.other_links ??
+      null) as TablesUpdate<'songs'>['other_links'],
     target: songData.target || null,
     theme: songData.theme || null,
     genre: songData.genre || null,
@@ -145,7 +207,7 @@ export async function updateSong(id: string, songData: Partial<Song>) {
 
   revalidatePath('/');
   revalidatePath(`/song/${id}`);
-  return data as Song;
+  return normalizeSong(data);
 }
 
 export async function deleteSong(id: string) {
@@ -238,7 +300,9 @@ export async function getFavorites() {
     throw new Error('Erro ao buscar favoritos');
   }
 
-  return data.map((fav: any) => fav.songs) as Song[];
+  return data.map((fav: unknown) =>
+    normalizeSong((fav as { songs: unknown }).songs)
+  ) as Song[];
 }
 
 export async function isFavorite(songId: string) {
