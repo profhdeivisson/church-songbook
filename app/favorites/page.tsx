@@ -1,23 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Container, CircularProgress, Box, Snackbar, Alert } from '@mui/material';
+import { Container, Typography, Box, CircularProgress, Snackbar, Alert } from '@mui/material';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { SongFilters } from '@/components/songs/SongFilters';
 import { SongGrid } from '@/components/songs/SongGrid';
 import { SongDetailModal } from '@/components/songs/SongDetailModal';
 import { EmptyState } from '@/components/common/EmptyState';
-import { SongFilters as Filters, Song } from '@/types/song';
+import { Favorite } from '@mui/icons-material';
+import { Song } from '@/types/song';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
-export default function Home() {
+export default function FavoritesPage() {
   const router = useRouter();
   const supabase = createClient();
   
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,131 +24,89 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Carregar usuário atual
+  // Carregar usuário e favoritos
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
-    }
-    loadUser();
-  }, [supabase]);
-
-  // Carregar músicas do Supabase
-  useEffect(() => {
-    async function loadSongs() {
+    async function loadFavorites() {
       try {
         setLoading(true);
-        let query = supabase
-          .from('songs')
-          .select('*')
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        
+        setCurrentUserId(user.id);
+
+        // Buscar favoritos com join nas músicas
+        const { data, error: fetchError } = await supabase
+          .from('favorites')
+          .select('song_id, songs(*)')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
-        // Aplicar filtros
-        if (filters.search) {
-          query = query.or(
-            `title.ilike.%${filters.search}%,artist.ilike.%${filters.search}%`
-          );
-        }
-        if (filters.target) {
-          query = query.eq('target', filters.target);
-        }
-        if (filters.theme) {
-          query = query.eq('theme', filters.theme);
-        }
-        if (filters.genre) {
-          query = query.eq('genre', filters.genre);
-        }
+        if (fetchError) throw fetchError;
 
-        const { data, error } = await query;
+        // Extrair músicas e IDs dos favoritos
+        const favoriteSongs = (data || [])
+          .map(fav => fav.songs)
+          .filter(Boolean)
+          .map(song => ({
+            ...song,
+            youtube_url: song.youtube_url || undefined,
+            spotify_url: song.spotify_url || undefined,
+            cifra_url: song.cifra_url || undefined,
+            cifraclub_url: song.cifraclub_url || undefined,
+            lyrics_url: song.lyrics_url || undefined,
+            other_links: song.other_links as any || undefined,
+            target: song.target as any || undefined,
+            theme: song.theme as any || undefined,
+            genre: song.genre as any || undefined,
+            tone: song.tone || undefined,
+            bpm: song.bpm || undefined,
+            observations: song.observations || undefined,
+          })) as Song[];
 
-        if (error) throw error;
+        const favoriteIds = new Set((data || []).map(fav => fav.song_id));
 
-        // Converter tipos do Supabase para Song
-        const songsData = (data || []).map(song => ({
-          ...song,
-          youtube_url: song.youtube_url || undefined,
-          spotify_url: song.spotify_url || undefined,
-          cifra_url: song.cifra_url || undefined,
-          cifraclub_url: song.cifraclub_url || undefined,
-          lyrics_url: song.lyrics_url || undefined,
-          other_links: song.other_links as any || undefined,
-          target: song.target as any || undefined,
-          theme: song.theme as any || undefined,
-          genre: song.genre as any || undefined,
-          tone: song.tone || undefined,
-          bpm: song.bpm || undefined,
-          observations: song.observations || undefined,
-        })) as Song[];
-
-        setSongs(songsData);
+        setSongs(favoriteSongs);
+        setFavorites(favoriteIds);
       } catch (err: any) {
-        console.error('Error loading songs:', err);
-        setError('Erro ao carregar músicas');
+        console.error('Error loading favorites:', err);
+        setError('Erro ao carregar favoritos');
       } finally {
         setLoading(false);
       }
     }
 
-    loadSongs();
-  }, [filters, supabase]);
-
-  // Carregar favoritos do usuário
-  useEffect(() => {
-    async function loadFavorites() {
-      if (!currentUserId) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('favorites')
-          .select('song_id')
-          .eq('user_id', currentUserId);
-
-        if (error) throw error;
-
-        const favIds = new Set(data?.map(f => f.song_id) || []);
-        setFavorites(favIds);
-      } catch (err) {
-        console.error('Error loading favorites:', err);
-      }
-    }
-
     loadFavorites();
-  }, [currentUserId, supabase]);
+  }, [supabase, router]);
 
   const handleFavoriteToggle = async (songId: string) => {
-    if (!currentUserId) {
-      setError('Você precisa estar logado para favoritar músicas');
-      return;
-    }
+    if (!currentUserId) return;
 
     try {
-      const isFavorite = favorites.has(songId);
+      // Remover favorito
+      const { error: deleteError } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('song_id', songId);
 
-      if (isFavorite) {
-        // Remover favorito
-        const { error } = await supabase
-          .from('favorites')
-          .delete()
-          .eq('user_id', currentUserId)
-          .eq('song_id', songId);
+      if (deleteError) throw deleteError;
 
-        if (error) throw error;
+      // Atualizar estado local
+      setFavorites(prev => {
+        const newFavorites = new Set(prev);
+        newFavorites.delete(songId);
+        return newFavorites;
+      });
 
-        setFavorites(prev => {
-          const newFavorites = new Set(prev);
-          newFavorites.delete(songId);
-          return newFavorites;
-        });
-      } else {
-        // Adicionar favorito
-        const { error } = await supabase
-          .from('favorites')
-          .insert({ user_id: currentUserId, song_id: songId });
-
-        if (error) throw error;
-
-        setFavorites(prev => new Set(prev).add(songId));
-      }
+      // Remover da lista
+      setSongs(prev => prev.filter(s => s.id !== songId));
+      
+      setSuccess('Música removida dos favoritos');
     } catch (err: any) {
       console.error('Error toggling favorite:', err);
       setError('Erro ao atualizar favorito');
@@ -178,6 +135,7 @@ export default function Home() {
   const handleModalFavoriteToggle = () => {
     if (selectedSong) {
       handleFavoriteToggle(selectedSong.id);
+      handleCloseModal();
     }
   };
 
@@ -192,15 +150,10 @@ export default function Home() {
   };
 
   const handleDelete = async (songId: string) => {
-    if (!currentUserId) {
-      setError('Você precisa estar logado para deletar músicas');
-      return;
-    }
+    if (!currentUserId) return;
 
     const song = songs.find(s => s.id === songId);
-    if (!song) return;
-
-    if (song.created_by !== currentUserId) {
+    if (!song || song.created_by !== currentUserId) {
       setError('Você só pode deletar músicas que você criou');
       return;
     }
@@ -210,12 +163,12 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('songs')
         .delete()
         .eq('id', songId);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
       setSongs(prev => prev.filter(s => s.id !== songId));
       setSuccess('Música deletada com sucesso!');
@@ -244,7 +197,17 @@ export default function Home() {
   return (
     <AppLayout>
       <Container maxWidth="xl">
-        <SongFilters filters={filters} onFiltersChange={setFilters} />
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600 }}>
+            Minhas Músicas Favoritas
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            {songs.length === 0
+              ? 'Você ainda não tem músicas favoritas'
+              : `${songs.length} ${songs.length === 1 ? 'música' : 'músicas'} favoritada${songs.length === 1 ? '' : 's'}`}
+          </Typography>
+        </Box>
+
         {songs.length > 0 ? (
           <SongGrid
             songs={songs}
@@ -258,8 +221,9 @@ export default function Home() {
           />
         ) : (
           <EmptyState
-            title="Nenhuma música encontrada"
-            description="Tente ajustar os filtros ou adicione novas músicas ao repertório"
+            title="Nenhuma música favoritada"
+            description="Favorite músicas na página inicial para vê-las aqui"
+            icon={<Favorite sx={{ fontSize: 80 }} />}
           />
         )}
       </Container>
