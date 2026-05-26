@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Container, CircularProgress, Box, Snackbar, Alert } from '@mui/material';
+import { EmptyState } from '@/components/common/EmptyState';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { SongDetailModal } from '@/components/songs/SongDetailModal';
 import { SongFilters } from '@/components/songs/SongFilters';
 import { SongGrid } from '@/components/songs/SongGrid';
-import { SongDetailModal } from '@/components/songs/SongDetailModal';
-import { EmptyState } from '@/components/common/EmptyState';
-import { SongFilters as Filters, Song } from '@/types/song';
 import { createClient } from '@/lib/supabase/client';
+import { SongFilters as Filters, Song } from '@/types/song';
+import { Alert, Box, CircularProgress, Container, LinearProgress, Snackbar } from '@mui/material';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
   const router = useRouter();
@@ -17,6 +17,7 @@ export default function Home() {
   
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refetching, setRefetching] = useState(false);
   const [filters, setFilters] = useState<Filters>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
@@ -38,7 +39,9 @@ export default function Home() {
   useEffect(() => {
     async function loadSongs() {
       try {
-        setLoading(true);
+        if (songs.length === 0) setLoading(true);
+        else setRefetching(true);
+
         let query = supabase
           .from('songs')
           .select('*')
@@ -87,6 +90,7 @@ export default function Home() {
         setError('Erro ao carregar músicas');
       } finally {
         setLoading(false);
+        setRefetching(false);
       }
     }
 
@@ -245,6 +249,7 @@ export default function Home() {
     <AppLayout>
       <Container maxWidth="xl">
         <SongFilters filters={filters} onFiltersChange={setFilters} />
+        {refetching && <LinearProgress sx={{ mb: 1 }} />}
         {songs.length > 0 ? (
           <SongGrid
             songs={songs}

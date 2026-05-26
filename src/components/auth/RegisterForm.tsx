@@ -1,24 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Box,
-  TextField,
   Button,
-  Typography,
-  Paper,
   Link as MuiLink,
-  Divider,
+  Paper,
+  TextField,
+  Typography
 } from '@mui/material';
-import { Google } from '@mui/icons-material';
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface RegisterFormProps {
   onSubmit: (email: string, password: string, confirmPassword: string) => Promise<void>;
-  onGoogleSignIn: () => Promise<void>;
 }
 
-export function RegisterForm({ onSubmit, onGoogleSignIn }: RegisterFormProps) {
+export function RegisterForm({ onSubmit }: RegisterFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,18 +43,6 @@ export function RegisterForm({ onSubmit, onGoogleSignIn }: RegisterFormProps) {
     } catch (err: any) {
       setError(err.message || 'Erro ao criar conta');
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await onGoogleSignIn();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login com Google');
       setIsLoading(false);
     }
   };
@@ -115,20 +100,6 @@ export function RegisterForm({ onSubmit, onGoogleSignIn }: RegisterFormProps) {
           sx={{ mb: 2 }}
         >
           {isLoading ? 'Criando conta...' : 'Criar Conta'}
-        </Button>
-
-        <Divider sx={{ my: 2 }}>ou</Divider>
-
-        <Button
-          fullWidth
-          variant="outlined"
-          size="large"
-          startIcon={<Google />}
-          onClick={handleGoogleSignIn}
-          disabled={isLoading}
-          sx={{ mb: 2 }}
-        >
-          Cadastrar com Google
         </Button>
 
         <Box sx={{ textAlign: 'center', mt: 2 }}>

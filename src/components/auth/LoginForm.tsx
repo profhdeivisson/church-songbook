@@ -1,24 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Box,
-  TextField,
   Button,
-  Typography,
-  Paper,
   Link as MuiLink,
-  Divider,
+  Paper,
+  TextField,
+  Typography
 } from '@mui/material';
-import { Google } from '@mui/icons-material';
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface LoginFormProps {
   onSubmit: (email: string, password: string) => Promise<void>;
-  onGoogleSignIn: () => Promise<void>;
 }
 
-export function LoginForm({ onSubmit, onGoogleSignIn }: LoginFormProps) {
+export function LoginForm({ onSubmit }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,18 +31,6 @@ export function LoginForm({ onSubmit, onGoogleSignIn }: LoginFormProps) {
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await onGoogleSignIn();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login com Google');
       setIsLoading(false);
     }
   };
@@ -99,20 +84,6 @@ export function LoginForm({ onSubmit, onGoogleSignIn }: LoginFormProps) {
             Esqueceu a senha?
           </MuiLink>
         </Box>
-
-        <Divider sx={{ my: 2 }}>ou</Divider>
-
-        <Button
-          fullWidth
-          variant="outlined"
-          size="large"
-          startIcon={<Google />}
-          onClick={handleGoogleSignIn}
-          disabled={isLoading}
-          sx={{ mb: 2 }}
-        >
-          Entrar com Google
-        </Button>
 
         <Box sx={{ textAlign: 'center', mt: 2 }}>
           <Typography variant="body2">

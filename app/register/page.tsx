@@ -47,30 +47,9 @@ export default function RegisterPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-
-    try {
-      const { error: signInError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (signInError) {
-        throw signInError;
-      }
-    } catch (err: any) {
-      console.error('Google sign in error:', err);
-      setError(err.message || 'Erro ao fazer login com Google');
-      throw err;
-    }
-  };
-
   return (
     <Container>
-      <RegisterForm onSubmit={handleSubmit} onGoogleSignIn={handleGoogleSignIn} />
+      <RegisterForm onSubmit={handleSubmit} />
       
       <Snackbar
         open={!!error}

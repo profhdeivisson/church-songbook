@@ -33,30 +33,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-
-    try {
-      const { error: signInError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (signInError) {
-        throw signInError;
-      }
-    } catch (err: any) {
-      console.error('Google sign in error:', err);
-      setError(err.message || 'Erro ao fazer login com Google');
-      throw err;
-    }
-  };
-
   return (
     <Container>
-      <LoginForm onSubmit={handleSubmit} onGoogleSignIn={handleGoogleSignIn} />
+      <LoginForm onSubmit={handleSubmit} />
       
       <Snackbar
         open={!!error}

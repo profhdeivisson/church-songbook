@@ -1,17 +1,18 @@
 'use client';
 
+import { SongFilters as Filters } from '@/types/song';
+import { Search } from '@mui/icons-material';
 import {
   Box,
-  TextField,
   FormControl,
   InputLabel,
-  Select,
   MenuItem,
   Paper,
+  Select,
   SelectChangeEvent,
+  TextField,
 } from '@mui/material';
-import { Search } from '@mui/icons-material';
-import { SongFilters as Filters } from '@/types/song';
+import { useEffect, useState } from 'react';
 
 interface SongFiltersProps {
   filters: Filters;
@@ -61,9 +62,21 @@ const genreOptions = [
 ];
 
 export function SongFilters({ filters, onFiltersChange }: SongFiltersProps) {
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onFiltersChange({ ...filters, search: event.target.value });
-  };
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onFiltersChange({ ...filters, search: searchInput || undefined });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  // Sincroniza se o filtro for limpo externamente
+  useEffect(() => {
+    if (!filters.search) setSearchInput('');
+  }, [filters.search]);
 
   const handleSelectChange = (field: keyof Filters) => (event: SelectChangeEvent) => {
     const value = event.target.value || undefined;
@@ -86,8 +99,8 @@ export function SongFilters({ filters, onFiltersChange }: SongFiltersProps) {
         <TextField
           fullWidth
           placeholder="Buscar por título ou artista..."
-          value={filters.search || ''}
-          onChange={handleSearchChange}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           slotProps={{
             input: {
               startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
