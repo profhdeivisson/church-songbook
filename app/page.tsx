@@ -7,7 +7,7 @@ import { SongFilters } from '@/components/songs/SongFilters';
 import { SongGrid } from '@/components/songs/SongGrid';
 import { createClient } from '@/lib/supabase/client';
 import { SongFilters as Filters, Song } from '@/types/song';
-import { Alert, Box, CircularProgress, Container, LinearProgress, Snackbar } from '@mui/material';
+import { Alert, Box, CircularProgress, Container, LinearProgress, Pagination, Snackbar, Typography } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -25,6 +25,11 @@ export default function Home() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const PAGE_SIZE = 12;
+
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   // Carregar usuário atual
   useEffect(() => {
@@ -42,10 +47,14 @@ export default function Home() {
         if (songs.length === 0) setLoading(true);
         else setRefetching(true);
 
+        const from = (page - 1) * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
         let query = supabase
           .from('songs')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(from, to);
 
         // Aplicar filtros
         if (filters.search) {
@@ -63,11 +72,11 @@ export default function Home() {
           query = query.eq('genre', filters.genre);
         }
 
-        const { data, error } = await query;
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
-        // Converter tipos do Supabase para Song
+        setTotalCount(count || 0);
         const songsData = (data || []).map(song => ({
           ...song,
           youtube_url: song.youtube_url || undefined,
@@ -95,7 +104,13 @@ export default function Home() {
     }
 
     loadSongs();
-  }, [filters, supabase]);
+  }, [filters, page, supabase]);
+
+  // Reseta para página 1 quando filtros mudam
+  const handleFiltersChange = (newFilters: Filters) => {
+    setPage(1);
+    setFilters(newFilters);
+  };
 
   // Carregar favoritos do usuário
   useEffect(() => {
@@ -248,19 +263,37 @@ export default function Home() {
   return (
     <AppLayout>
       <Container maxWidth="xl">
-        <SongFilters filters={filters} onFiltersChange={setFilters} />
+        <SongFilters filters={filters} onFiltersChange={handleFiltersChange} />
+        <Typography variant="body1" gutterBottom sx={{ textAlign: 'right' }}>
+          {totalCount} músicas encontradas
+        </Typography>
         {refetching && <LinearProgress sx={{ mb: 1 }} />}
         {songs.length > 0 ? (
-          <SongGrid
-            songs={songs}
-            favorites={favorites}
-            onFavoriteToggle={handleFavoriteToggle}
-            onShare={handleShare}
-            onSongClick={handleSongClick}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            currentUserId={currentUserId}
-          />
+          <>
+            <SongGrid
+              songs={songs}
+              favorites={favorites}
+              onFavoriteToggle={handleFavoriteToggle}
+              onShare={handleShare}
+              onSongClick={handleSongClick}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              currentUserId={currentUserId}
+            />
+            {totalPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => {
+                    setPage(value);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  color="primary"
+                />
+              </Box>
+            )}
+          </>
         ) : (
           <EmptyState
             title="Nenhuma música encontrada"
